@@ -159,12 +159,6 @@ Open `https://localhost:xxxx/` → use **Login** to set the patron context.
 
 ---
 
-## 中文简要说明
-
-这是一个教学用途的 ASP.NET Core MVC（.NET 8）示例项目，使用 EF Core + MySQL（Pomelo 驱动）实现**图书登录、查看、借书/还书**等最小功能。连接串通过 **User Secrets** 的 `MyConn:Library` 配置；数据库表结构见上方 SQL。由于用静态变量保存登录状态，只适合单用户演示，**不可直接用于生产**。
-
----
-
 ## License
 
 Educational sample — add your preferred license.
