@@ -1,164 +1,150 @@
 # LibraryWebServer
 
-An educational ASP.NET Core MVC web app for a tiny library system. It demonstrates login, listing titles, checking out and returning books, and basic CRUD-style queries using **Entity Framework Core** with **MySQL** (Pomelo provider). Target framework: **.NET 8**.
+A lending system for a small library, built with ASP.NET Core MVC and Entity
+Framework Core. Patrons sign in with a card, browse the catalogue, borrow a copy
+and return it; the server enforces the lending rules and explains every refusal.
 
-> ⚠️ This project purposely keeps state in static variables for simplicity (single-user only). Do **not** use this pattern in production.
+The interesting part is not the CRUD — it is the rules around it. Most of what a
+lending system gets wrong is a calculation or a constraint: a copy that ends up on
+loan to two people, a due date that shifts by a day across a timezone change, a
+patron charged for a day that has not elapsed. Those are the cases this project
+is built and tested around.
 
----
+## Stack
 
-## Features
+| | |
+|---|---|
+| Runtime | .NET 8, ASP.NET Core MVC |
+| Data | Entity Framework Core 8 — SQL Server by default, MySQL supported |
+| Tests | xUnit, SQLite in memory |
+| Client | jQuery, Bootstrap |
 
-- **Patron login** (name + card number) → sets in-memory session (`HomeController` static fields).
-- **Browse all titles** with availability and current holder name.
-- **My Books** page listing the logged-in patron’s checkouts.
-- **Check out / Return** a copy by serial number.
-- **Simple MVC views** under `Views/Home` with jQuery-powered tables.
+## Running it
 
----
-
-## Tech Stack
-
-- **ASP.NET Core MVC** (net8.0)
-- **Entity Framework Core 8**
-- **Pomelo.EntityFrameworkCore.MySql 8.0.x**
-- **MySQL** database
-- Client: jQuery, Bootstrap-style tables
-
----
-
-## Project Structure
-
-```
-LibraryWebServer/
-  Controllers/
-    HomeController.cs        # Login, AllTitles, ListMyBooks, CheckOutBook, ReturnBook, etc.
-  Models/
-    LibraryContext.cs        # EF Core DbContext; uses user-secret connection string
-    Titles.cs                # ISBN, Title, Author
-    Inventory.cs             # Serial, Isbn (+ navigation to Titles and CheckedOut)
-    Patrons.cs               # CardNum, Name (+ navigation to CheckedOut, Phones)
-    Phones.cs                # CardNum, Phone
-    CheckedOut.cs            # CardNum, Serial (join between Patrons and Inventory)
-  Views/
-    Home/Index.cshtml        # table of all titles (with who has it)
-    Home/Login.cshtml        # login form
-    Home/MyBooks.cshtml      # table of patron's books + actions
-    Shared/_Layout.cshtml    # site shell
-  wwwroot/                   # static assets
-  Program.cs                 # service wiring & routing
-  appsettings.json           # logging, hosts
-  LibraryWebServer.csproj    # TargetFramework: net8.0, EF packages
-```
-
----
-
-## Database Schema
-
-The EF models imply the following minimal schema (MySQL):
-
-```sql
-CREATE TABLE Titles (
-  Isbn   VARCHAR(20) PRIMARY KEY,
-  Title  VARCHAR(255) NOT NULL,
-  Author VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE Inventory (
-  Serial INT UNSIGNED PRIMARY KEY,
-  Isbn   VARCHAR(20) NOT NULL,
-  CONSTRAINT fk_inventory_isbn FOREIGN KEY (Isbn) REFERENCES Titles(Isbn)
-);
-
-CREATE TABLE Patrons (
-  CardNum INT UNSIGNED PRIMARY KEY,
-  Name    VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE Phones (
-  CardNum INT UNSIGNED NOT NULL,
-  Phone   VARCHAR(30) NOT NULL,
-  PRIMARY KEY (CardNum, Phone),
-  CONSTRAINT fk_phones_card FOREIGN KEY (CardNum) REFERENCES Patrons(CardNum)
-);
-
-CREATE TABLE CheckedOut (
-  CardNum INT UNSIGNED NOT NULL,
-  Serial  INT UNSIGNED NOT NULL,
-  PRIMARY KEY (CardNum, Serial),
-  CONSTRAINT fk_co_card FOREIGN KEY (CardNum) REFERENCES Patrons(CardNum),
-  CONSTRAINT fk_co_serial FOREIGN KEY (Serial) REFERENCES Inventory(Serial)
-);
-```
-
-> The app **does not** run migrations by default; create the schema yourself or enable migrations.
-
----
-
-## Configuration
-
-The connection string is read from **User Secrets** at key `MyConn:Library` (see `Program.cs`).
-
-```jsonc
-// dotnet user-secrets set --project <path-to-csproj> "MyConn:Library" "Server=localhost;Database=library;User=root;Password=yourpw;"
-{
-  "MyConn": {
-    "Library": "Server=localhost;Database=library;User=root;Password=yourpw;"
-  }
-}
-```
-
-**Set it via CLI** (from the project directory containing `LibraryWebServer.csproj`):
 ```bash
+# 1. Point it at a database (user secrets keeps the connection string out of git)
+cd src/LibraryWebServer
 dotnet user-secrets init
-dotnet user-secrets set "MyConn:Library" "Server=localhost;Database=library;User=root;Password=yourpw;TreatTinyAsBoolean=true;"
-```
+dotnet user-secrets set "ConnectionStrings:Library" \
+  "Server=localhost;Database=Library;Trusted_Connection=True;TrustServerCertificate=True"
 
-> Uses `ServerVersion.AutoDetect(...)` so it will adapt to your MySQL version.
-
----
-
-## How to Run
-
-```bash
-# 1) Ensure .NET 8 SDK is installed and MySQL is running
-dotnet --info
-
-# 2) Create the database & tables (see schema above)
-
-# 3) Configure the connection string via user-secrets (see above)
-
-# 4) Restore & run
-dotnet restore
+# 2. Run — in Development the schema is created and a demo catalogue is seeded
 dotnet run
 ```
 
-App will map default route: `/{controller=Home}/{action=Index}/{id?}`.  
-Open `https://localhost:xxxx/` → use **Login** to set the patron context.
+Sign in as `Ada Lovelace` / card `1`, or `Grace Hopper` / card `2`.
 
----
+To run against MySQL instead, set `Database:Provider` to `MySql` and supply a
+MySQL connection string. The provider is read from configuration, so switching
+does not require a rebuild.
 
-## Key Endpoints (via `HomeController`)
+### Database setup
 
-- `POST /Home/CheckLogin` → body: `name`, `cardnum` → returns `{{ success: bool }}`
-- `POST /Home/AllTitles` → returns each book + an optional holder name.
-- `POST /Home/ListMyBooks` → returns `[{ title, author, serial }]` for the logged-in patron.
-- `POST /Home/CheckOutBook` → body: `serial`
-- `POST /Home/ReturnBook` → body: `serial`
-- `GET /Home/Login`, `GET /Home/MyBooks`, `GET /Home/Index`
+In Development the app calls `EnsureCreated` on startup, so a clean checkout runs
+with one command and no hand-written SQL. That is the right trade for a demo but
+not for a schema that has to evolve in place. To move to migrations:
 
-> The server tracks the “logged in” user with static fields; it’s intended for a single-user demo only.
+```bash
+dotnet tool install --global dotnet-ef
+dotnet ef migrations add InitialCreate --project src/LibraryWebServer
+```
 
----
+then swap `EnsureCreatedAsync()` for `MigrateAsync()` in `Program.cs`.
 
-## Notes & Limitations
+## Tests
 
-- Static in-memory “session” → **single-user** only; not thread-safe.
-- No server-side validation/auth; only demo checks exist.
-- No migrations included; seed data not provided.
-- Use for coursework or interview demos, not production.
+```bash
+dotnet test
+```
 
----
+The tests run against SQLite in memory rather than the EF in-memory provider,
+because the primary key on `CheckedOut` is doing real work — the in-memory
+provider does not enforce keys, so a double-checkout test would pass there while
+production rejected the same write.
 
-## License
+The clock is injected via `TimeProvider`, so due-date and overdue tests move time
+by hand instead of sleeping or depending on when the suite happens to run.
 
-Educational sample — add your preferred license.
+## The lending rules
+
+All of them live in `LibraryService`, configured from `appsettings.json`:
+
+```json
+"LoanPolicy": {
+  "LoanPeriodDays": 21,
+  "MaxConcurrentLoans": 5,
+  "BlockCheckoutWhenOverdue": true
+}
+```
+
+- **One copy, one borrower.** `CheckedOut` is keyed on `Serial` alone, so the
+  database rejects a second loan of the same copy. Two patrons clicking "check
+  out" on the last copy at the same moment is settled by the primary key, not by
+  a check the application has to remember to perform; the loser gets a refusal.
+- **Loan limit** per patron, counted across that patron's loans only.
+- **An overdue item blocks further borrowing** when the policy says so. This is
+  the rule most often reported as a bug: the patron is under the limit, the copy
+  is on the shelf, and checkout is still refused.
+- **Returning is not idempotent by accident.** Returning a copy held by someone
+  else is refused rather than quietly accepted — accepting it would clear the
+  real holder's record and hide the fact that they still have the book.
+- **Overdue is counted in whole elapsed days.** Due exactly now is not overdue,
+  and a book returned six hours late costs zero days. The boundary belongs to the
+  patron.
+- **Dates are stored in UTC**, so a 21-day loan is 21 days across a
+  daylight-saving transition rather than 20 days and 23 hours.
+
+### Refusals carry a reason
+
+Every operation returns an outcome rather than a bare boolean:
+
+```csharp
+public enum CheckoutOutcome
+{
+    Success, PatronNotFound, CopyNotFound,
+    CopyAlreadyOnLoan, LoanLimitReached, BlockedByOverdueLoan
+}
+```
+
+A refusal that is correct behaviour can then be told apart from a defect without
+reading the server log, and the patron gets an explanation instead of a button
+that appears to do nothing.
+
+## Catalogue query
+
+The catalogue left-joins throughout: titles → copies → active loan → holder. A
+title with no copies still appears with a null serial, and a copy on the shelf
+still appears with no holder. An inner join anywhere in that chain is the classic
+way to make stock silently vanish from the catalogue, so there is a test for each
+case — including a title (`Dune` in the seed data) deliberately catalogued with
+no copies.
+
+## Layout
+
+```
+src/LibraryWebServer/
+  Controllers/HomeController.cs   HTTP surface; reads the patron from the auth cookie
+  Services/LibraryService.cs      every lending rule, and the only place they live
+  Services/LoanPolicy.cs          rules bound from configuration
+  Services/LibraryResults.cs      outcome types returned to callers
+  Data/LibraryContext.cs          EF model and relational constraints
+  Data/DbSeeder.cs                idempotent demo catalogue
+  Models/                         Titles, Inventory, Patrons, Phones, CheckedOut
+tests/LibraryWebServer.Tests/     xUnit; SQLite in memory, controllable clock
+```
+
+Authentication is a standard ASP.NET Core auth cookie carrying the card number as
+a claim. No request state is held in fields, so concurrent users cannot read each
+other's session, and the state-changing endpoints are guarded with antiforgery
+tokens that `site.js` attaches to each AJAX call.
+
+## Origin
+
+The schema and the lending domain come from an earlier coursework
+assignment. Everything above — the service layer, the lending rules and their
+tests, cookie authentication, the configurable provider, and the seed data — was
+built on top of it afterwards.
+
+## Licence
+
+MIT.
