@@ -22,21 +22,30 @@ is built and tested around.
 ## Running it
 
 ```bash
-# 1. Point it at a database (user secrets keeps the connection string out of git)
 cd src/LibraryWebServer
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:Library" \
-  "Server=localhost;Database=Library;Trusted_Connection=True;TrustServerCertificate=True"
-
-# 2. Run — in Development the schema is created and a demo catalogue is seeded
 dotnet run
 ```
 
-Sign in as `Ada Lovelace` / card `1`, or `Grace Hopper` / card `2`.
+That is the whole setup. In Development the app defaults to SQLite — a file, no
+server and no credentials — creates the schema and seeds a demo catalogue. Sign
+in as `Ada Lovelace` / card `1`, or `Grace Hopper` / card `2`.
 
-To run against MySQL instead, set `Database:Provider` to `MySql` and supply a
-MySQL connection string. The provider is read from configuration, so switching
-does not require a rebuild.
+### Against SQL Server or MySQL
+
+The provider is read from configuration, so switching needs no rebuild. Keep the
+connection string in user secrets rather than in the repository:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "Database:Provider" "SqlServer"
+dotnet user-secrets set "ConnectionStrings:Library" \
+  "Server=localhost,1433;Database=Library;User Id=sa;Password=…;TrustServerCertificate=True"
+```
+
+For MySQL, set `Database:Provider` to `MySql`. Pomelo needs the server version
+before its first query; pin it with `Database:MySqlVersion` (for example
+`8.0.36`) to avoid an extra connection at startup, or leave it unset to have the
+version detected.
 
 ### Database setup
 

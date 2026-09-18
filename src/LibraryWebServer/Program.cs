@@ -36,14 +36,46 @@ builder.Services.AddDbContext<LibraryContext>(options =>
         case "sqlserver":
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
             break;
+
         case "mysql":
-            options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+            // The server version has to be known before the first query. Detecting
+            // it opens a connection here, during service registration, so a bad
+            // connection string surfaces as a driver stack trace before the app is
+            // even built. Pin the version in configuration to skip that round trip;
+            // fall back to detection, and translate its failure into a sentence that
+            // says which setting to look at.
+            var pinned = builder.Configuration["Database:MySqlVersion"];
+            var version = pinned is not null
+                ? new MySqlServerVersion(Version.Parse(pinned))
+                : DetectMySqlVersion(connectionString);
+            options.UseMySql(connectionString, version);
             break;
+
+        case "sqlite":
+            // No server, no credentials — the database is a file. This is what makes
+            // a clean checkout runnable without any setup.
+            options.UseSqlite(connectionString);
+            break;
+
         default:
             throw new InvalidOperationException(
-                $"Unsupported Database:Provider '{provider}'. Use SqlServer or MySql.");
+                $"Unsupported Database:Provider '{provider}'. Use SqlServer, MySql or Sqlite.");
     }
 });
+
+static ServerVersion DetectMySqlVersion(string connectionString)
+{
+    try
+    {
+        return ServerVersion.AutoDetect(connectionString);
+    }
+    catch (Exception ex)
+    {
+        throw new InvalidOperationException(
+            "Could not reach MySQL to detect its version. Check ConnectionStrings:Library, " +
+            "or set Database:MySqlVersion (for example \"8.0.36\") to skip detection.", ex);
+    }
+}
 
 builder.Services.AddScoped<ILibraryService, LibraryService>();
 
