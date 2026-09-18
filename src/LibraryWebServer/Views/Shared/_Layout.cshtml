@@ -41,6 +41,9 @@
             &copy; 2024 - LibraryWebServer - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
         </div>
     </footer>
+    @* Rendered once here so every AJAX call on the site can attach the token. *@
+    @Html.AntiForgeryToken()
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

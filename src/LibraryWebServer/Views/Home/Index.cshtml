@@ -1,154 +1,113 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@{
+    ViewData["Title"] = "Catalogue";
 }
 
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+@* jQuery comes from _Layout. Loading a second copy here would discard the
+   $.ajaxSetup the layout's site.js registered, and every guarded POST would
+   start failing with a 400. *@
 
-
-
+<h2>Catalogue</h2>
 
 <div class="col-md-12">
     <table id="tblBooks" class="table table-striped">
         <thead>
             <tr>
-                <th align="left" class="productth">ISBN</th>
-                <th align="left" class="productth">Title</th>
-                <th align="left" class="productth">Author</th>
-                <th align="left" class="productth">Serial</th>
-                <th align="left" class="productth">Holder</th>
+                <th>ISBN</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Copy</th>
+                <th>Status</th>
             </tr>
         </thead>
+        <tbody id="booksBody"></tbody>
     </table>
 </div>
 
-<a href="/Home/MyBooks">Go to my books</a>
-<br />
-<br />
+<p>
+    <a href="/Home/MyBooks">My books</a>
+</p>
 
-<button onClick='LogOut()'>Logout</button>
+<button class="btn btn-secondary" onclick="LogOut()">Log out</button>
 
-
-@section Scripts
-    {
+@section Scripts {
     <script type="text/javascript">
-
-
-
-        function PopulateTable(tbl, books) {
-            var newBody = document.createElement("tbody");
-
-
-            $.each(books, function (i, item) {
-                var tr = document.createElement("tr");
-
-                var td = document.createElement("td");
-                td.appendChild(document.createTextNode(item.isbn));
-                tr.appendChild(td);
-
-                var td = document.createElement("td");
-                td.appendChild(document.createTextNode(item.title));
-                tr.appendChild(td);
-
-                var td = document.createElement("td");
-                td.appendChild(document.createTextNode(item.author));
-                tr.appendChild(td);
-
-                var td = document.createElement("td");
-                if (item.serial) {
-                    td.appendChild(document.createTextNode(item.serial));
-                }
-                else {
-                    td.appendChild(document.createTextNode("no copies"));
-                }
-                tr.appendChild(td);
-
-
-                var td = document.createElement("td");
-                if (item.serial && item.name == "") {
-                    var button = document.createElement("button");
-                    button.appendChild(document.createTextNode("checkout"));
-                    button.setAttribute("onClick", "javascript:CheckOut('" + item.serial + "')");
-                    td.appendChild(button);
-                }
-                else {
-                    td.appendChild(document.createTextNode(item.name));
-                }
-
-                tr.appendChild(td);
-
-
-                newBody.appendChild(tr);
-            });
-
-            tbl.appendChild(newBody);
-
+        function cell(row, text) {
+            var td = document.createElement("td");
+            td.appendChild(document.createTextNode(text));
+            row.appendChild(td);
+            return td;
         }
 
+        function statusCell(row, item) {
+            var td = document.createElement("td");
+
+            if (!item.serial) {
+                // Catalogued but no physical copy — the left join keeps the title
+                // visible instead of dropping it.
+                td.appendChild(document.createTextNode("no copies"));
+            } else if (item.name) {
+                td.appendChild(document.createTextNode(
+                    "on loan to " + item.name + (item.due ? " — due " + item.due : "")));
+            } else {
+                var button = document.createElement("button");
+                button.className = "btn btn-sm btn-primary";
+                button.appendChild(document.createTextNode("Check out"));
+                button.addEventListener("click", function () { CheckOut(item.serial); });
+                td.appendChild(button);
+            }
+
+            row.appendChild(td);
+        }
+
+        function PopulateTable(books) {
+            var body = document.getElementById("booksBody");
+            body.replaceChildren();
+
+            books.forEach(function (item) {
+                var tr = document.createElement("tr");
+                cell(tr, item.isbn);
+                cell(tr, item.title);
+                cell(tr, item.author);
+                cell(tr, item.serial ? item.serial : "—");
+                statusCell(tr, item);
+                body.appendChild(tr);
+            });
+        }
+
+        function LoadCatalogue() {
+            $.ajax({
+                type: "POST",
+                url: '@Url.Action("AllTitles", "Home")',
+                dataType: "json",
+                success: PopulateTable,
+                error: function () { alert("Could not load the catalogue."); }
+            });
+        }
+
+        function CheckOut(serial) {
+            $.ajax({
+                type: "POST",
+                url: '@Url.Action("CheckOutBook", "Home")',
+                data: { serial: serial },
+                dataType: "json",
+                success: function (data) {
+                    if (reportOutcome(data)) {
+                        LoadCatalogue();
+                    }
+                },
+                error: function () { alert("Checkout request failed."); }
+            });
+        }
 
         function LogOut() {
-
             $.ajax({
-                type: 'POST',
+                type: "POST",
                 url: '@Url.Action("LogOut", "Home")',
-                dataType: 'json',
-                success: function () {
-                    location.reload();
-                },
-                error: function (ex) {
-                    var r = jQuery.parseJSON(response.responseText);
-                    alert("Message: " + r.Message);
-                    alert("StackTrace: " + r.StackTrace);
-                    alert("ExceptionType: " + r.ExceptionType);
-                    location.reload();
-                }
+                dataType: "json",
+                complete: function () { window.location.href = "/Home/Login"; }
             });
-            return false;
         }
 
-        function CheckOut(serialInput) {
-            $.ajax({
-                type: 'POST',
-                url: '@Url.Action("CheckOutBook", "Home")',
-                dataType: 'json',
-                data: { serial: serialInput },
-                success: function (data, status) {
-                    location.reload();
-                },
-                error: function (ex) {
-                    var r = jQuery.parseJSON(response.responseText);
-                    alert("Message: " + r.Message);
-                    alert("StackTrace: " + r.StackTrace);
-                    alert("ExceptionType: " + r.ExceptionType);
-                    location.reload();
-                }
-            });
-            return false;
-        }
-
-
-        $(function () {
-            LoadData();
-        });
-
-        function LoadData() {
-            var tbl = document.getElementById("tblBooks");
-
-            $.ajax({
-                type: 'POST',
-                url: '@Url.Action("AllTitles", "Home")',
-                dataType: 'json',
-                success: function (data, status) {
-                    //alert(JSON.stringify(data));
-                    PopulateTable(tbl, data);
-                },
-                error: function (ex) {
-                    var r = jQuery.parseJSON(response.responseText);
-                    alert("Message: " + r.Message);
-                    alert("StackTrace: " + r.StackTrace);
-                    alert("ExceptionType: " + r.ExceptionType);
-                }
-            });
-            return false;
-        }
+        $(LoadCatalogue);
     </script>
 }

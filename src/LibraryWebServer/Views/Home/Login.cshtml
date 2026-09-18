@@ -1,61 +1,56 @@
-﻿@{
+@{
     ViewData["Title"] = "Login";
 }
 
-<div class="col-md-12">
-    <div class="panel panel-primary">
-        <div class="panel-heading">
-            <h3 class="panel-title">Login</h3>
-        </div>
-        <div class="panel-body">
-            <div class="form-group col-md-5">
-                <label>Name</label>
-                <input type="text" name="Name" id="Name" class="form-control" placeholder="Enter Name" required="" />
-            </div>
-            <div class="form-group col-md-5">
-                <label>Cardnum</label>
-                <input type="text" name="Cardnum" id="Cardnum" class="form-control" placeholder="Enter Cardnum" required="" />
-            </div>
+<div class="col-md-6">
+    <h2>Sign in</h2>
+    <p class="text-muted">@ViewData["Message"]</p>
 
-            <div class="form-group col-md-1">
-                <input class="btn btn-primary" name="submitButton" id="btnLogin" value="Login" type="button">
-            </div>
-        </div>
+    <div class="mb-3">
+        <label class="form-label" for="Name">Name</label>
+        <input type="text" name="Name" id="Name" class="form-control" placeholder="Enter name" required />
     </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="Cardnum">Card number</label>
+        <input type="number" name="Cardnum" id="Cardnum" class="form-control" placeholder="Enter card number" required />
+    </div>
+
+    <button class="btn btn-primary" id="btnLogin" type="button">Sign in</button>
 </div>
 
-
-@section Scripts
-    {
+@section Scripts {
     <script type="text/javascript">
-
         $(function () {
-          $("#btnLogin").click(function () {
-            var nameval = $("#Name").val();
-            var id = parseInt($("#Cardnum").val());
+            function submitLogin() {
+                var name = $("#Name").val();
+                var card = parseInt($("#Cardnum").val(), 10);
 
-            $.ajax({
-              type: "POST",
-              url: '@Url.Action("CheckLogin", "Home")',
-              data: {name : nameval, cardnum : id},
-              dataType: "json",
-              //contentType: "application/json; charset=utf-8",
-              success: function (data) {
-                if (!data.success) {
-                  alert("Incorrect Name or Cardnum");
+                if (!name || isNaN(card)) {
+                    alert("Enter both your name and card number.");
+                    return;
                 }
-                else {
-                  window.location.href = "/Home/Index";
 
+                $.ajax({
+                    type: "POST",
+                    url: '@Url.Action("CheckLogin", "Home")',
+                    data: { name: name, cardnum: card },
+                    dataType: "json",
+                    success: function (data) {
+                        if (reportOutcome(data)) {
+                            window.location.href = "/Home/Index";
+                        }
+                    },
+                    error: function () { alert("Login request failed."); }
+                });
+            }
+
+            $("#btnLogin").click(submitLogin);
+            $("#Cardnum, #Name").on("keypress", function (e) {
+                if (e.which === 13) {
+                    submitLogin();
                 }
-              },
-              error: function () {
-                alert("Error while logging in");
-              }
-              });
-            return false;
-          });
+            });
         });
     </script>
 }
-

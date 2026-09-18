@@ -1,105 +1,96 @@
-﻿@{
-    ViewData["Title"] = "MyBooks";
+@{
+    ViewData["Title"] = "My Books";
 }
 
-<h2>MyBooks</h2>
-
+<h2>My books</h2>
 
 <div class="col-md-12">
-  <table id="tblMyBooks" class="table table-striped">
-    <thead>
-      <tr>
-        <th align="left" class="productth">Title</th>
-        <th align="left" class="productth">Author</th>
-        <th align="left" class="productth">Serial</th>
-        <th align="left" class="productth">Options</th>
-      </tr>
-    </thead>
-  </table>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Copy</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Due</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="loansBody"></tbody>
+    </table>
+    <p id="emptyNotice" class="text-muted" hidden>You have nothing checked out.</p>
 </div>
 
+<p>
+    <a href="/Home/Index">Back to catalogue</a>
+</p>
 
-@section Scripts
-  {
-  <script type="text/javascript">
-
-
-    function PopulateTable(tbl, books) {
-      var newBody = document.createElement("tbody");
-
-      $.each(books, function (i, item) {
-        var tr = document.createElement("tr");
-
-        var td = document.createElement("td");
-        td.appendChild(document.createTextNode(item.title));
-        tr.appendChild(td);
-
-        var td = document.createElement("td");
-        td.appendChild(document.createTextNode(item.author));
-        tr.appendChild(td);
-
-        var td = document.createElement("td");
-        td.appendChild(document.createTextNode(item.serial));
-        tr.appendChild(td);       
-
-
-        var td = document.createElement("td");
-        var button = document.createElement("button");
-        button.appendChild(document.createTextNode("return"));
-        button.setAttribute("onClick", "javascript:Return('" + item.serial + "')");
-        td.appendChild(button);
-        tr.appendChild(td);
-        newBody.appendChild(tr);
-      });
-
-      tbl.appendChild(newBody);
-
-    }
-
-    
-    function Return(serialInput) {
-      $.ajax({
-        type: 'POST',
-        url: '@Url.Action("ReturnBook", "Home")',
-        dataType: 'json',
-        data: { serial: serialInput },
-        success: function (data, status) {
-          location.reload();
-        },
-        error: function (ex) {
-          var r = jQuery.parseJSON(response.responseText);
-          alert("Message: " + r.Message);
-          alert("StackTrace: " + r.StackTrace);
-          alert("ExceptionType: " + r.ExceptionType);
-          location.reload();
+@section Scripts {
+    <script type="text/javascript">
+        function cell(row, text) {
+            var td = document.createElement("td");
+            td.appendChild(document.createTextNode(text));
+            row.appendChild(td);
+            return td;
         }
-      });
-      return false;
-    }
-    
-    
-    $(function () {
-      LoadData();
-    });
-    
-    function LoadData() {
-      var tbl = document.getElementById("tblMyBooks");
-      $.ajax({
-        type: 'POST',
-        url: '@Url.Action("ListMyBooks", "Home")',
-        dataType: 'json',
-        success: function (data, status) {
-          //alert(JSON.stringify(data));
-          PopulateTable(tblMyBooks, data);
-        },
-        error: function (ex) {
-          var r = jQuery.parseJSON(response.responseText);
-          alert("Message: " + r.Message);
-          alert("StackTrace: " + r.StackTrace);
-          alert("ExceptionType: " + r.ExceptionType);
+
+        function PopulateLoans(loans) {
+            var body = document.getElementById("loansBody");
+            body.replaceChildren();
+            document.getElementById("emptyNotice").hidden = loans.length > 0;
+
+            loans.forEach(function (item) {
+                var tr = document.createElement("tr");
+                cell(tr, item.serial);
+                cell(tr, item.title);
+                cell(tr, item.author);
+
+                var due = cell(tr, item.overdue
+                    ? item.due + " (" + item.daysOverdue + " day(s) overdue)"
+                    : item.due);
+                if (item.overdue) {
+                    due.className = "text-danger fw-bold";
+                }
+
+                var actions = document.createElement("td");
+                var button = document.createElement("button");
+                button.className = "btn btn-sm btn-outline-primary";
+                button.appendChild(document.createTextNode("Return"));
+                button.addEventListener("click", function () { ReturnBook(item.serial); });
+                actions.appendChild(button);
+                tr.appendChild(actions);
+
+                body.appendChild(tr);
+            });
         }
-        });
-      return false;
-    } 
-  </script>
+
+        function LoadLoans() {
+            $.ajax({
+                type: "POST",
+                url: '@Url.Action("ListMyBooks", "Home")',
+                dataType: "json",
+                success: PopulateLoans,
+                error: function () { alert("Could not load your loans."); }
+            });
+        }
+
+        function ReturnBook(serial) {
+            $.ajax({
+                type: "POST",
+                url: '@Url.Action("ReturnBook", "Home")',
+                data: { serial: serial },
+                dataType: "json",
+                success: function (data) {
+                    if (data && data.success && data.daysOverdue > 0) {
+                        alert(data.message);
+                    } else {
+                        reportOutcome(data);
+                    }
+                    LoadLoans();
+                },
+                error: function () { alert("Return request failed."); }
+            });
+        }
+
+        $(LoadLoans);
+    </script>
 }
