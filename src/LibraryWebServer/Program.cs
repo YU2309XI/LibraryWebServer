@@ -89,7 +89,13 @@ builder.Services
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        // HTTPS-only in production. In development the app listens on plain HTTP,
+        // and a cookie marked Secure is silently dropped there — login appears to
+        // succeed and bounces straight back to the sign-in page. Relaxing this to
+        // SameAsRequest keeps "dotnet run" working without a dev certificate.
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
     });
 
 builder.Services.AddAuthorization();
